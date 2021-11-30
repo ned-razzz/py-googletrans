@@ -15,6 +15,7 @@ from httpx import Timeout
 
 from googletrans import urls, utils
 from googletrans.gtoken import TokenAcquirer
+from hanspell import spell_checker
 from googletrans.constants import (
     DEFAULT_CLIENT_SERVICE_URLS,
     DEFAULT_FALLBACK_SERVICE_URLS,
@@ -171,6 +172,9 @@ class Translator:
         return extra
 
     def translate(self, text: str, dest='en', src='auto'):
+        if(src == 'ko'):
+            textChangeOne = spell_checker.check(text)
+            textChange = textChangeOne.checked
         dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
@@ -191,7 +195,10 @@ class Translator:
                 raise ValueError('invalid destination language')
 
         origin = text
-        data, response = self._translate(text, dest, src)
+        if(src == 'ko'):
+            data, response = self._translate(textChange, dest, src)
+        else:
+            data, response = self._translate(text, dest, src)
 
         token_found = False
         square_bracket_counts = [0, 0]
