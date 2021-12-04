@@ -1,5 +1,6 @@
 from httpx import Response
 from typing import List
+from googletrans.dict import DictRequest
 
 
 class Base:
@@ -64,6 +65,18 @@ class Translated(Base):
             'extra_data': self.extra_data,
             'parts': list(map(lambda part: part.__dict__(), self.parts)),
         }
+
+    def getVoca(self):
+        dict = DictRequest()
+        word_list = self.text.split(sep=' ')
+
+        voca = {}
+        for word in word_list:
+            res = dict.request(word)
+            if res is not None:
+                voca[word] = res
+
+        return voca
 
 class Detected(Base):
     """Language detection result object

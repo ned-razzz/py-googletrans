@@ -199,7 +199,7 @@ class Translator:
             data, response = self._translate(textChange, dest, src)
         else:
             data, response = self._translate(text, dest, src)
-
+        
         token_found = False
         square_bracket_counts = [0, 0]
         resp = ''
@@ -261,6 +261,7 @@ class Translator:
             'origin_pronunciation': origin_pronunciation,
             'parsed': parsed,
         }
+
         result = Translated(src=src, dest=dest, origin=origin,
                             text=translated, pronunciation=pronunciation,
                             parts=translated_parts,
