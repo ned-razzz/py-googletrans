@@ -1,6 +1,6 @@
 from httpx import Response
 from typing import List
-from googletrans.dict import DictRequest
+from dict import DictRequest
 
 
 class Base:
@@ -66,6 +66,7 @@ class Translated(Base):
             'parts': list(map(lambda part: part.__dict__(), self.parts)),
         }
 
+    #신버전
     def getVoca(self):
         dict = DictRequest()
         word_list = self.text.split(sep=' ')

@@ -6,8 +6,8 @@ You can translate text using this module.
 """
 import random
 import typing
-import re
-import json
+import re# 추가부분
+import json# 추가부분
 
 import httpcore
 import httpx
@@ -15,18 +15,17 @@ from httpx import Timeout
 
 from googletrans import urls, utils
 from googletrans.gtoken import TokenAcquirer
-from hanspell import spell_checker
 from googletrans.constants import (
-    DEFAULT_CLIENT_SERVICE_URLS,
-    DEFAULT_FALLBACK_SERVICE_URLS,
+    DEFAULT_CLIENT_SERVICE_URLS,#추가부분
+    DEFAULT_FALLBACK_SERVICE_URLS,#추가부분
     DEFAULT_USER_AGENT, LANGCODES, LANGUAGES, SPECIAL_CASES,
     DEFAULT_RAISE_EXCEPTION, DUMMY_DATA
 )
-from googletrans.models import Translated, Detected, TranslatedPart
+from googletrans.models import Translated, Detected, TranslatedPart#추가부분
 
 EXCLUDES = ('en', 'ca', 'fr')
 
-RPC_ID = 'MkEWBc'
+RPC_ID = 'MkEWBc'# 추가부분
 
 class Translator:
     """Google Translate ajax API implementation class
@@ -35,7 +34,6 @@ class Translator:
 
     :param service_urls: google translate url list. URLs will be used randomly.
                          For example ``['translate.google.com', 'translate.google.co.kr']``
-                         To preferably use the non webapp api, service url should be translate.googleapis.com
     :type service_urls: a sequence of strings
 
     :param user_agent: the User-Agent header to send when making requests.
@@ -53,26 +51,41 @@ class Translator:
                     Dictionary mapping protocol or protocol and host to the URL of the proxy
                     For example ``{'http': 'foo.bar:3128', 'http://host.name': 'foo.bar:4012'}``
     :param raise_exception: if `True` then raise exception if smth will go wrong
-    :param http2: whether to use HTTP2 (default: True)
-    :param use_fallback: use a fallback method
     :type raise_exception: boolean
     """
-
+    """
+    def __init__(self, service_urls=None, user_agent=DEFAULT_USER_AGENT,
+                 raise_exception=DEFAULT_RAISE_EXCEPTION,
+                 proxies: typing.Dict[str, httpcore.SyncHTTPTransport] = None,
+                 timeout: Timeout = None,
+                 http2=True,
+                 use_fallback=False):#fallback추가 
+    """
+    
     def __init__(self, service_urls=DEFAULT_CLIENT_SERVICE_URLS, user_agent=DEFAULT_USER_AGENT,
                  raise_exception=DEFAULT_RAISE_EXCEPTION,
                  proxies: typing.Dict[str, httpcore.SyncHTTPTransport] = None,
                  timeout: Timeout = None,
                  http2=True,
                  use_fallback=False):
-
+                 
         self.client = httpx.Client(http2=http2)
         if proxies is not None:  # pragma: nocover
             self.client.proxies = proxies
 
         self.client.headers.update({
             'User-Agent': user_agent,
-            'Referer': 'https://translate.google.com',
+            'Referer': 'https://translate.google.com',#추가부분
         })
+        """#//원본
+        if timeout is not None:
+            self.client.timeout = timeout
+
+        self.service_urls = service_urls or ['translate.google.com']
+        self.token_acquirer = TokenAcquirer(
+            client=self.client, host=self.service_urls[0])
+        self.raise_exception = raise_exception
+        """ #// 수정본  
 
         if timeout is not None:
             self.client.timeout = timeout
@@ -85,12 +98,11 @@ class Translator:
             #default way of working: use the defined values from user app
             self.service_urls = service_urls
             self.client_type = 'tw-ob'
-            self.token_acquirer = TokenAcquirer(
-                client=self.client, host=self.service_urls[0])
+            self.token_acquirer = TokenAcquirer(client=self.client, host=self.service_urls[0])
 
         self.raise_exception = raise_exception
 
-    def _build_rpc_request(self, text: str, dest: str, src: str):
+    def _build_rpc_request(self, text: str, dest: str, src: str):   
         return json.dumps([[
             [
                 RPC_ID,
@@ -99,12 +111,31 @@ class Translator:
                 'generic',
             ],
         ]], separators=(',', ':'))
-
+  
     def _pick_service_url(self):
         if len(self.service_urls) == 1:
             return self.service_urls[0]
         return random.choice(self.service_urls)
+    """//원본
+    def _translate(self, text, dest, src, override):
+        token = self.token_acquirer.do(text)
+        params = utils.build_params(query=text, src=src, dest=dest,
+                                    token=token, override=override)
 
+        url = urls.TRANSLATE.format(host=self._pick_service_url())
+        r = self.client.get(url, params=params)
+
+        if r.status_code == 200:
+            data = utils.format_json(r.text)
+            return data, r
+
+        if self.raise_exception:
+            raise Exception('Unexpected status code "{}" from {}'.format(
+                r.status_code, self.service_urls))
+
+        DUMMY_DATA[0][0][0] = text
+        return DUMMY_DATA, r
+    """ #// 수정본
     def _translate(self, text: str, dest: str, src: str):
         url = urls.TRANSLATE_RPC.format(host=self._pick_service_url())
         data = {
@@ -125,29 +156,8 @@ class Translator:
                 r.status_code, self.service_urls))
 
         return r.text, r
-
-    def _translate_legacy(self, text, dest, src, override):
-        token = '' #dummy default value here as it is not used by api client
-        if self.client_type == 'webapp':
-            token = self.token_acquirer.do(text)
-
-        params = utils.build_params(client=self.client_type, query=text, src=src, dest=dest,
-                                    token=token, override=override)
-
-        url = urls.TRANSLATE.format(host=self._pick_service_url())
-        r = self.client.get(url, params=params)
-
-        if r.status_code == 200:
-            data = utils.format_json(r.text)
-            return data, r
-
-        if self.raise_exception:
-            raise Exception('Unexpected status code "{}" from {}'.format(
-                r.status_code, self.service_urls))
-
-        DUMMY_DATA[0][0][0] = text
-        return DUMMY_DATA, r
-
+    
+        
     def _parse_extra_data(self, data):
         response_parts_name_mapping = {
             0: 'translation',
@@ -171,6 +181,8 @@ class Translator:
 
         return extra
 
+    # // 수정본
+
     def translate(self, text: str, dest='en', src='auto'):
         if(src == 'ko'):
             textChangeOne = spell_checker.check(text)
@@ -178,7 +190,7 @@ class Translator:
         dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
-        if src != 'auto' and src not in LANGUAGES:
+        if src != 'auto' and src not in LANGUAGES:  
             if src in SPECIAL_CASES:
                 src = SPECIAL_CASES[src]
             elif src in LANGCODES:
@@ -269,9 +281,14 @@ class Translator:
                             response=response)
         return result
 
+    def detect(self, text: str):
+        translated = self.translate(text, src='auto', dest='en')
+        result = Detected(lang=translated.src, confidence=translated.extra_data.get('confidence', None), response=translated._response)
+        return result
 
-    def translate_legacy(self, text, dest='en', src='auto', **kwargs):
-        """Translate text from source language to destination language
+"""#원본
+    def translate(self, text, dest='en', src='auto', **kwargs):
+        Translate text from source language to destination language
 
         :param text: The source text(s) to be translated. Batch translation is supported via sequence input.
         :type text: UTF-8 :class:`str`; :class:`unicode`; string sequence (list, tuple, iterator, generator)
@@ -308,7 +325,7 @@ class Translator:
             The quick brown fox  ->  빠른 갈색 여우
             jumps over  ->  이상 점프
             the lazy dog  ->  게으른 개
-        """
+        
         dest = dest.lower().split('_', 1)[0]
         src = src.lower().split('_', 1)[0]
 
@@ -331,12 +348,12 @@ class Translator:
         if isinstance(text, list):
             result = []
             for item in text:
-                translated = self.translate_legacy(item, dest=dest, src=src, **kwargs)
+                translated = self.translate(item, dest=dest, src=src, **kwargs)
                 result.append(translated)
             return result
 
         origin = text
-        data, response = self.translate_legacy(text, dest, src)
+        data, response = self._translate(text, dest, src, kwargs)
 
         # this code will be updated when the format is changed.
         translated = ''.join([d[0] if d[0] else '' for d in data[0]])
@@ -372,14 +389,12 @@ class Translator:
                             response=response)
 
         return result
+"""
 
-    def detect(self, text: str):
-        translated = self.translate(text, src='auto', dest='en')
-        result = Detected(lang=translated.src, confidence=translated.extra_data.get('confidence', None), response=translated._response)
-        return result
 
-    def detect_legacy(self, text, **kwargs):
-        """Detect language of the input text
+"""
+    def detect(self, text, **kwargs):
+        Detect language of the input text
 
         :param text: The source text(s) whose language you want to identify.
                      Batch detection is supported via sequence input.
@@ -408,7 +423,7 @@ class Translator:
             ja 0.92929292
             en 0.96954316
             fr 0.043500196
-        """
+        
         if isinstance(text, list):
             result = []
             for item in text:
@@ -416,7 +431,7 @@ class Translator:
                 result.append(lang)
             return result
 
-        data, response = self._translate_legacy(text, 'en', 'auto', kwargs)
+        data, response = self._translate(text, 'en', 'auto', kwargs)
 
         # actual source language that will be recognized by Google Translator when the
         # src passed is equal to auto.
@@ -434,3 +449,4 @@ class Translator:
         result = Detected(lang=src, confidence=confidence, response=response)
 
         return result
+"""
